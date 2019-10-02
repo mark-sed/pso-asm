@@ -3,10 +3,11 @@ ASM_FLAGS=-f elf64 -F dwarf -g
 ASM_SRC=pso.asm
 ASM_OUTPUT=pso.o
 C_C=gcc
-C_FLAGS=-Wall -pedantic -no-pie -std=c11 -g
+C_FLAGS=-Wall -pedantic -no-pie -g
 C_OUTPUT=main
 C_SRC=main.c
 C_LIBS=-lm
+
 
 build: obj main
 

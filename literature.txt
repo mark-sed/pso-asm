@@ -1,0 +1,1 @@
+RAND_MAX value taken from - https://en.cppreference.com/w/c/numeric/random/RAND_MAX

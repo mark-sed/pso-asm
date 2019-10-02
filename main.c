@@ -25,11 +25,29 @@ double ackleys_function(double x, double y){
     return -20 * pow(M_E, -0.2*sqrt(0.5*(x*x + y*y))) - pow(M_E, 0.5*(cos(2*M_PI*x)+cos(2*M_PI*y))) + M_E + 20;
 }
 
+/*typedef struct {
+    double velocity[2];  //< Velocity for each dimension
+    double position[2];  //< Position in each dimension
+    double best_pos[2];  //< Best position
+    double best_val;     //< Value of the best position
+} TParticle3Dim;
+
+extern TParticle3Dim swarm[];
+*/
+
 int main(int argc, char *argv[]){
    pso_init();
    double bounds[][2] = {{-50.0, 50.0}, {-50., 50.}};
 
    TPSOxy res = pso3dim_static(ackleys_function, bounds, less_than, 1000000);
+
    printf("[%.*e, %.*e]\n", DECIMAL_DIG, res.x, DECIMAL_DIG, res.y);
+
+/*
+  for(int i = 0; i < 20; i++){
+   	TParticle3Dim p = swarm[i];
+   	printf("%d. %f %f - %f %f (%f, %f)\n", i, p.velocity[0], p.velocity[1], p.position[0], p.position[1], p.best_pos[0], p.best_pos[1]);
+   }
+*/
    return 0;
 }

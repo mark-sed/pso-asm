@@ -37,6 +37,14 @@ void pso_init(){
     srand(time(NULL));
 }
 
+double random_double(double min, double max){
+	/*static int i = 1;
+	printf("%d MIN: %f, MAX: %f\n", i++, min, max);
+	double r = min + (rand() / (RAND_MAX / (max-min)));
+	printf("%d. %f \n", i++, r); */
+	return min + (rand() / (RAND_MAX / (max-min)));
+}
+
 
 /**
  * Particle swarm optimization algorithm for 3 dimensional functions that does not use dynamical allocation
