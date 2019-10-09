@@ -9,6 +9,8 @@ C_SRC=main.c
 C_LIBS=-lm
 
 
+.PHONY: obj main
+
 build: obj main
 
 obj:

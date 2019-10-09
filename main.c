@@ -30,10 +30,11 @@ double ackleys_function(double x, double y){
     double position[2];  //< Position in each dimension
     double best_pos[2];  //< Best position
     double best_val;     //< Value of the best position
+    double a;			 //< added padding
 } TParticle3Dim;
 
-extern TParticle3Dim swarm[];
-*/
+extern TParticle3Dim swarm[];*/
+
 
 int main(int argc, char *argv[]){
    pso_init();
@@ -48,6 +49,6 @@ int main(int argc, char *argv[]){
    	TParticle3Dim p = swarm[i];
    	printf("%d. %f %f - %f %f (%f, %f)\n", i, p.velocity[0], p.velocity[1], p.position[0], p.position[1], p.best_pos[0], p.best_pos[1]);
    }
-*/
-   return 0;
+
+   return 0;*/
 }
