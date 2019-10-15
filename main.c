@@ -17,7 +17,11 @@
 #define M_E (double)(2.71828182845904523536028747135266249775724709369995957496696762772407663035354759457138217852516642742746639193e+00)
 #endif
 
+bool debug = false;
+
 bool less_than(double a, double b){
+    if(debug)
+      printf("\r");  //TODO: Why does it return incorrect values without this?!
     return a < b;
 }
 
@@ -25,7 +29,7 @@ double ackleys_function(double x, double y){
     return -20 * pow(M_E, -0.2*sqrt(0.5*(x*x + y*y))) - pow(M_E, 0.5*(cos(2*M_PI*x)+cos(2*M_PI*y))) + M_E + 20;
 }
 
-/*typedef struct {
+typedef struct {
     double velocity[2];  //< Velocity for each dimension
     double position[2];  //< Position in each dimension
     double best_pos[2];  //< Best position
@@ -33,7 +37,7 @@ double ackleys_function(double x, double y){
     double a;			 //< added padding
 } TParticle3Dim;
 
-extern TParticle3Dim swarm[];*/
+extern TParticle3Dim swarm[];
 
 
 int main(int argc, char *argv[]){
@@ -44,11 +48,11 @@ int main(int argc, char *argv[]){
 
    printf("[%.*e, %.*e]\n", DECIMAL_DIG, res.x, DECIMAL_DIG, res.y);
 
-/*
-  for(int i = 0; i < 20; i++){
+
+  /*for(int i = 0; i < 20; i++){
    	TParticle3Dim p = swarm[i];
    	printf("%d. %f %f - %f %f (%f, %f)\n", i, p.velocity[0], p.velocity[1], p.position[0], p.position[1], p.best_pos[0], p.best_pos[1]);
-   }
+   }*/
 
-   return 0;*/
+   return 0;
 }

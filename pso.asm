@@ -68,6 +68,27 @@ extern random_double
         movq qword[%1+_TPARTICLE3DIM_BEST_POS1], xmm0
 %endmacro ;; init_particle3dim
 
+;; UPDATE_PARTICLE3DIM
+;; Update velocity and position of a particle based on best global best position found
+;; @param
+;;      1 Current particle struct address 
+;;      2 Minimal X bound
+;;      3 Maximal X bound
+;;      4 Minimal Y bound
+;;      5 Maximal Y bound
+;;      6 Best global position X
+;;      7 Best global position Y
+%macro update_particle3dim 7
+        xorps xmm0, xmm0                        ;; Set 0 and 1 as the arguments
+        movq xmm1, [__CONST_1_0]
+        call random_double
+        movq xmm1, [__COEFF_CP]                 ;; Multiply answer by coefficient and save
+        mulsd xmm0, xmm1
+
+        ;; TODO: Vectorize updating
+
+%endmacro
+
 ;; Constants
 DBL_MAX                     EQU 0x7FEFFFFFFFFFFFFF  ;; Maximal value of double
 
@@ -80,6 +101,9 @@ swarm   resb _PSO3DIM_STATIC_PARTICLES * _TPARTICLE3DIM_SIZE ;; Array of TPartic
 section .data
 __CONST__1_0     dq -1.0
 __CONST_1_0      dq  1.0
+__COEFF_W        dq  0.5
+__COEFF_CP       dq  2.05
+__COEFF_CG       dq  2.05
 
 ;; Code
 section .text
@@ -105,6 +129,16 @@ pso3dim_static:
         push rbp
         mov rbp, rsp
         sub rsp, 16                             ;; Space for best position
+        push rcx                                ;; Save for checking if current iteration is the first one
+        push rdi                                ;; Save function pointer
+        push rdx                                ;; Save fitness function pointer
+        
+        %define best_pos_x   rbp - 8            ;; Defines for variables saved on stack
+        %define best_pos_y   rbp - 16
+        %define iter_counter rbp - 24
+        %define function_ptr rbp - 32
+        %define fitness_ptr  rbp - 40
+
         and rsp, -16                            ;; Align stack for called functions
         push r12
         push r13
@@ -115,9 +149,7 @@ pso3dim_static:
 
         mov r12, rsi                            ;; Move bounds to callee saved register
         mov r13, rcx                            ;; Saving max iterations
-        push rcx                                ;; Save for checking if current iteration is the first one
-        push rdi                                ;; Save function pointer
-        push rdx                                ;; Save fitness function pointer
+        
         xor rbx, rbx
 .swarm_init_loop:
         init_particle3dim swarm+rbx, qword[r12], qword[r12+8], qword[r12+16], qword[r12+24]
@@ -130,19 +162,19 @@ pso3dim_static:
         xor r15, r15                            ;; Counter
 .for_each_particle:
         movq xmm0, qword[swarm + r15 + _TPARTICLE3DIM_POSITION0]
-        mov rax, [rsp + 8]                      ;; Load function pointer into RAX
+        mov rax, [function_ptr]                 ;; Load function pointer into RAX
         movq xmm1, qword[swarm + r15 + _TPARTICLE3DIM_POSITION1]
         call rax
         movq rbx, xmm0                          ;; Save returned value, but keep as argument
 
-        mov rax, [rsp]                          ;; Load fitness function
+        mov rax, [fitness_ptr]                          ;; Load fitness function
         movq xmm1, qword[swarm + r15 + _TPARTICLE3DIM_BEST_VAL]
         call rax
         cmp rax, 1                              ;; If true then set this as personal best
         je .personal_best
         ;; Fitness function check is before checking first iteration,
         ;; because that will happen only once and will fail all the other times
-        cmp r13, [rsp + 16]                     ;; Check if this is the first iteration
+        cmp r13, [iter_counter]                 ;; Check if this is the first iteration
         jne .personal_best_end
 .personal_best:
         mov qword[swarm + r15 + _TPARTICLE3DIM_BEST_VAL], rbx
@@ -152,7 +184,7 @@ pso3dim_static:
         mov qword[swarm + r15 + _TPARTICLE3DIM_BEST_POS1], rcx
 
         movq xmm0, rbx                          ;; Load function value
-        mov rax, [rsp]                          ;; Load fitness function
+        mov rax, [fitness_ptr]                  ;; Load fitness function
         movq xmm1, r14                          ;; Load best value
         call rax
         cmp rax, 0                              ;; If true then set this as global best
@@ -161,8 +193,8 @@ pso3dim_static:
         mov r14, rbx                            ;; Set best value to current value
         mov rax, qword[swarm + r15 + _TPARTICLE3DIM_POSITION0]
         mov rcx, qword[swarm + r15 + _TPARTICLE3DIM_POSITION1] 
-        mov qword[rbp-8], rax
-        mov qword[rbp-16], rcx
+        mov qword[best_pos_x], rax              ;; Set best position to current one
+        mov qword[best_pos_y], rcx
 .personal_best_end:
 
         add r15, _TPARTICLE3DIM_SIZE
@@ -171,15 +203,27 @@ pso3dim_static:
 
         ;; TODO: update particle
         ;; TODO: test outputs
+        xor r15, r15
+.particle_update:
+        
+                ;; REMOVe
+                jmp .end
+
+
+        ;; TODO: Vectorize updating
+
+        add r15, _TPARTICLE3DIM_SIZE
+        cmp r15, _TPARTICLE3DIM_SIZE * _PSO3DIM_STATIC_PARTICLES
+        jne .particle_update
+
 
         dec r13
         jnz .max_iter_loop                      ;; CMP is left out because dec sets zero flag
 
 .end:
-        movq xmm0, qword[rbp-8]
-        movq xmm1, qword[rbp-16]
+        movq xmm0, qword[best_pos_x]
+        movq xmm1, qword[best_pos_y]
         ;; Leaving function
-        add rsp, 24                             ;; Pushed arguments
         pop rbx
         pop r15
         pop r14
