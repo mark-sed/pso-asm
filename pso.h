@@ -34,15 +34,17 @@ typedef double (* func3dim)(double, double);
  */
 void pso_init(){
     // Initializing pseudo-random generator
-    srand(time(NULL));
+    srand(3);
 }
 
 double random_double(double min, double max){
-	/*static int i = 1;
-	printf("%d MIN: %f, MAX: %f\n", i++, min, max);
+	//static int i = 1;
+	//printf("%d MIN: %f, MAX: %f\n", i++, min, max);
 	double r = min + (rand() / (RAND_MAX / (max-min)));
-	printf("%d. %f \n", i++, r); */
-	return min + (rand() / (RAND_MAX / (max-min)));
+	
+	//printf("%d. %f \n", i++, r);
+	return r;
+	//return min + (rand() / (RAND_MAX / (max-min)));
 }
 
 

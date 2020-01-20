@@ -82,11 +82,13 @@ extern random_double
         xorps xmm0, xmm0                        ;; Set 0 and 1 as the arguments
         movq xmm1, [__CONST_1_0]
         call random_double
-        movq xmm1, [__COEFF_CP]                 ;; Multiply answer by coefficient and save
-        mulsd xmm0, xmm1
+        movq xmm2, xmm0							;; Save random value (rp)
 
-        ;; TODO: Vectorize updating
+        xorps xmm0, xmm0
+        movq xmm1, [__CONST_1_0]				;; Has to be loaded again because of stdecl convention
+        call random_double
 
+        ; TODO: AVX (check notebook++)
 %endmacro
 
 ;; Constants
@@ -140,6 +142,7 @@ pso3dim_static:
         %define fitness_ptr  rbp - 40
 
         and rsp, -16                            ;; Align stack for called functions
+        push r11
         push r12
         push r13
         push r14
@@ -201,21 +204,15 @@ pso3dim_static:
         cmp r15, _TPARTICLE3DIM_SIZE * _PSO3DIM_STATIC_PARTICLES
         jne .for_each_particle
 
-        ;; TODO: update particle
-        ;; TODO: test outputs
         xor r15, r15
+        mov rax, qword[best_pos_x]				;; Get best x and y positions into registers (to speed up calculations)
+        mov rcx, qword[best_pos_y]
 .particle_update:
+		update_particle3dim swarm+r15, qword[r12], qword[r12+8], qword[r12+16], qword[r12+24], rax, rcx
         
-                ;; REMOVe
-                jmp .end
-
-
-        ;; TODO: Vectorize updating
-
         add r15, _TPARTICLE3DIM_SIZE
         cmp r15, _TPARTICLE3DIM_SIZE * _PSO3DIM_STATIC_PARTICLES
         jne .particle_update
-
 
         dec r13
         jnz .max_iter_loop                      ;; CMP is left out because dec sets zero flag
@@ -229,6 +226,7 @@ pso3dim_static:
         pop r14
         pop r13
         pop r12
+        pop r11
         mov rsp, rbp
         pop rbp
         ret

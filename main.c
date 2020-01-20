@@ -20,8 +20,8 @@
 bool debug = false;
 
 bool less_than(double a, double b){
-    if(debug)
-      printf("\r");  //TODO: Why does it return incorrect values without this?!
+    //if(debug)
+      //printf("\r");  //TODO: Why does it return incorrect values without this?!
     return a < b;
 }
 
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]){
    pso_init();
    double bounds[][2] = {{-50.0, 50.0}, {-50., 50.}};
 
-   TPSOxy res = pso3dim_static(ackleys_function, bounds, less_than, 1000000);
+   TPSOxy res = pso3dim_static(ackleys_function, bounds, less_than, 100000);
 
    printf("[%.*e, %.*e]\n", DECIMAL_DIG, res.x, DECIMAL_DIG, res.y);
 
