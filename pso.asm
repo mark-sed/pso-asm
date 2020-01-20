@@ -68,8 +68,20 @@ extern random_double
         movq qword[%1+_TPARTICLE3DIM_BEST_POS1], xmm0
 %endmacro ;; init_particle3dim
 
+;; RND2RAX 
+;; Saves random value to rax
+;; @param
+;;      1 Max value
+%macro rnd2rax 1
+        xorps xmm0, xmm0                        ;; Set 0 and 1 as the arguments
+        movq xmm1, %1
+        call random_double
+        movq rax, xmm0                          ;; Save random value to rax
+%endmacro ;; rnd2rax
+
 ;; UPDATE_PARTICLE3DIM
 ;; Update velocity and position of a particle based on best global best position found
+;; Minimal X bound should be broadcasted into ymm11, maximal X into ymm12, minimal Y into ymm13, maxmial Y into ymm14
 ;; @param
 ;;      1 Current particle struct address 
 ;;      2 Minimal X bound
@@ -79,16 +91,45 @@ extern random_double
 ;;      6 Best global position X
 ;;      7 Best global position Y
 %macro update_particle3dim 7
-        xorps xmm0, xmm0                        ;; Set 0 and 1 as the arguments
-        movq xmm1, [__CONST_1_0]
-        call random_double
-        movq xmm2, xmm0							;; Save random value (rp)
+        ;; Filling ymm0 with 4 random doubles
+        ;; Moving doubles to xmm registers and then xmm registers to ymm
+        ;; because there is no vpinsrq for avx registers
+        rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
+        vpinsrq xmm8, rax, 0x0
+        rnd2rax [__CONST_1_0]                        
+        vpinsrq xmm8, rax, 0x1
+        vinserti128 ymm10, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm14
 
-        xorps xmm0, xmm0
-        movq xmm1, [__CONST_1_0]				;; Has to be loaded again because of stdecl convention
-        call random_double
+        rnd2rax [__CONST_1_0]
+        vpinsrq xmm8, rax, 0x0
+        rnd2rax [__CONST_1_0]
+        vpinsrq xmm8, rax, 0x1
+        vinserti128 ymm9, ymm10, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm15
 
-        ; TODO: AVX (check notebook++)
+        ;; Filling ymm1 with 4 random doubles
+        rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
+        vpinsrq xmm8, rax, 0x0
+        rnd2rax [__CONST_1_0]                        
+        vpinsrq xmm8, rax, 0x1
+        vinserti128 ymm9, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm14
+
+        rnd2rax [__CONST_1_0]
+        vpinsrq xmm8, rax, 0x0
+        rnd2rax [__CONST_1_0]
+        vpinsrq xmm8, rax, 0x1
+        vinserti128 ymm8, ymm10, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm13
+
+        vmulpd ymm0, ymm9, [__COEFF_CP]        ;; Multiply random numbers by CP
+        vmulpd ymm1, ymm8, [__COEFF_CG]        ;; Multiply random numbers by CG
+
+        ;; Load x velocity to ymm registers
+        vpinsrq xmm0, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0], 0x0
+        vpinsrq xmm0, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE], 0x1
+        vinserti128 ymm2, ymm10, xmm0, 0x1
+        vpinsrq xmm0, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*2], 0x0
+        vpinsrq xmm0, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*3], 0x1
+        vinserti128 ymm3, ymm2, xmm0, 0x0
+        
 %endmacro
 
 ;; Constants
@@ -103,9 +144,9 @@ swarm   resb _PSO3DIM_STATIC_PARTICLES * _TPARTICLE3DIM_SIZE ;; Array of TPartic
 section .data
 __CONST__1_0     dq -1.0
 __CONST_1_0      dq  1.0
-__COEFF_W        dq  0.5
-__COEFF_CP       dq  2.05
-__COEFF_CG       dq  2.05
+__COEFF_W        dq  0.5, 0.5, 0.5, 0.5
+__COEFF_CP       dq  2.05, 2.05, 2.05, 2.05
+__COEFF_CG       dq  2.05, 2.05, 2.05, 2.05
 
 ;; Code
 section .text
@@ -205,12 +246,19 @@ pso3dim_static:
         jne .for_each_particle
 
         xor r15, r15
-        mov rax, qword[best_pos_x]				;; Get best x and y positions into registers (to speed up calculations)
+        mov rax, qword[best_pos_x]		;; Get best x and y positions into registers (to speed up calculations)
         mov rcx, qword[best_pos_y]
+
+        vbroadcastsd ymm11, qword[r12]          ;; Fill ymm registers with bounds for bound comparison
+        vbroadcastsd ymm12, qword[r12+8]
+        vbroadcastsd ymm13, qword[r12+16]
+        vbroadcastsd ymm14, qword[r12+24]
+        vbroadcastsd ymm5, qword[best_pos_x]   ;; Fill ymm with best positions
+        vbroadcastsd ymm6, qword[best_pos_y]
 .particle_update:
-		update_particle3dim swarm+r15, qword[r12], qword[r12+8], qword[r12+16], qword[r12+24], rax, rcx
-        
-        add r15, _TPARTICLE3DIM_SIZE
+	update_particle3dim swarm+r15, qword[r12], qword[r12+8], qword[r12+16], qword[r12+24], rax, rcx
+
+        add r15, _TPARTICLE3DIM_SIZE * 4
         cmp r15, _TPARTICLE3DIM_SIZE * _PSO3DIM_STATIC_PARTICLES
         jne .particle_update
 
