@@ -19,16 +19,7 @@
 
 bool debug = false;
 
-bool less_than(double a, double b){
-    //if(debug)
-      //printf("\r");  //TODO: Why does it return incorrect values without this?!
-    return a < b;
-}
-
-double ackleys_function(double x, double y){
-    return -20 * pow(M_E, -0.2*sqrt(0.5*(x*x + y*y))) - pow(M_E, 0.5*(cos(2*M_PI*x)+cos(2*M_PI*y))) + M_E + 20;
-}
-
+/*
 typedef struct {
     double velocity[2];  //< Velocity for each dimension
     double position[2];  //< Position in each dimension
@@ -37,22 +28,27 @@ typedef struct {
     double a;			 //< added padding
 } TParticle3Dim;
 
-extern TParticle3Dim swarm[];
+extern TParticle3Dim swarm[];*/
+
+bool less_than(double a, double b){
+    if(debug){
+      printf("\r");
+    }
+    return a < b;
+}
+
+double ackleys_function(double x, double y){
+    return -20 * pow(M_E, -0.2*sqrt(0.5*(x*x + y*y))) - pow(M_E, 0.5*(cos(2*M_PI*x)+cos(2*M_PI*y))) + M_E + 20;
+}
 
 
 int main(int argc, char *argv[]){
    pso_init();
    double bounds[][2] = {{-50.0, 50.0}, {-50., 50.}};
 
-   TPSOxy res = pso3dim_static(ackleys_function, bounds, less_than, 100000);
+   TPSOxy res = pso3dim_static(ackleys_function, bounds, less_than, 20);
 
    printf("[%.*e, %.*e]\n", DECIMAL_DIG, res.x, DECIMAL_DIG, res.y);
-
-
-  /*for(int i = 0; i < 20; i++){
-   	TParticle3Dim p = swarm[i];
-   	printf("%d. %f %f - %f %f (%f, %f)\n", i, p.velocity[0], p.velocity[1], p.position[0], p.position[1], p.best_pos[0], p.best_pos[1]);
-   }*/
 
    return 0;
 }

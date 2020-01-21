@@ -34,7 +34,7 @@ typedef double (* func3dim)(double, double);
  */
 void pso_init(){
     // Initializing pseudo-random generator
-    srand(3);
+    srand(1);
 }
 
 double random_double(double min, double max){
