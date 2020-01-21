@@ -12,7 +12,8 @@
 
 ;; Exported functions
 global pso3dim_static           ;; PSO algorithm for 3 dimensional function (does not use heap)
-global swarm
+global fitness_less_than        ;; Fitness function (less than)
+global fitness_greater_than     ;; Fitness function (greater than)
 
 ;; Included C functions
 extern random_double
@@ -91,149 +92,7 @@ extern random_double
         vandpd %1, %2, %1
         vandpd %3, %3, %4
         vaddpd %1, %3, %1
-%endmacro
-
-;; UPDATE_PARTICLE3DIM
-;; Update velocity and position of a particle based on best global best position found
-;; Minimal X bound should be broadcasted into ymm11, maximal X into ymm12, minimal Y into ymm13, maxmial Y into ymm14
-;; @param
-;;      1 Current particle struct address 
-%macro update_particle3dim 1
-        ;; Filling ymm0 with 4 random doubles
-        ;; Moving doubles to xmm registers and then xmm registers to ymm
-        ;; because there is no vpinsrq for avx registers
-        rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
-        vpinsrq xmm8, rax, 0x0
-        rnd2rax [__CONST_1_0]                        
-        vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm10, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm14
-
-        rnd2rax [__CONST_1_0]
-        vpinsrq xmm8, rax, 0x0
-        rnd2rax [__CONST_1_0]
-        vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm9, ymm10, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm15
-
-        ;; Filling ymm1 with 4 random doubles
-        rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
-        vpinsrq xmm8, rax, 0x0
-        rnd2rax [__CONST_1_0]                        
-        vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm9, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm14
-
-        rnd2rax [__CONST_1_0]
-        vpinsrq xmm8, rax, 0x0
-        rnd2rax [__CONST_1_0]
-        vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm8, ymm10, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm13
-
-        vbroadcastsd ymm5, qword[best_pos_x]   ;; Fill ymm with best positions
-        vbroadcastsd ymm6, qword[best_pos_y]
-
-        vmulpd ymm0, ymm9, [__COEFF_CP]        ;; Multiply random numbers by CP
-        vmulpd ymm1, ymm8, [__COEFF_CG]        ;; Multiply random numbers by CG
-
-        ;; Load x velocity to ymm registers
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY0], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE], 0x1
-        vinserti128 ymm2, ymm10, xmm0, 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*2], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*3], 0x1
-        vinserti128 ymm3, ymm2, xmm0, 0x1
-
-        ;; Load y velocity to ymm registers
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY1], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE], 0x1
-        vinserti128 ymm2, ymm10, xmm0, 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*2], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*3], 0x1
-        vinserti128 ymm4, ymm2, xmm0, 0x1
-
-        ;; Load x position to ymm registers
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION0], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE], 0x1
-        vinserti128 ymm2, ymm10, xmm0, 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*2], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*3], 0x1
-        vinserti128 ymm7, ymm2, xmm0, 0x1
-
-        ;; Load y position to ymm registers
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION1], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE], 0x1
-        vinserti128 ymm2, ymm10, xmm0, 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*2], 0x0
-        vpinsrq xmm0, qword[%1+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*3], 0x1
-        vinserti128 ymm8, ymm2, xmm0, 0x1
-        
-        vsubpd ymm5, ymm5, ymm7                 ;; Subtract best x position and x position
-        vsubpd ymm6, ymm6, ymm8                 ;; Subtract best y position and y position
-
-        vmulpd ymm3, ymm3, [__COEFF_W]          ;; Multiply velocity by CW
-        vmulpd ymm4, ymm4, [__COEFF_W]
-
-        vmovapd ymm9, ymm5                      ;; Copy position differences
-        vmovapd ymm10, ymm6
-
-        vmulpd ymm5, ymm5, ymm0                 ;; Multiply random value with position difference
-        vmulpd ymm6, ymm6, ymm1
-        vmulpd ymm10, ymm10, ymm0
-        vmulpd ymm9, ymm9, ymm1
-        
-        vaddpd ymm3, ymm3, ymm5                 ;; Add velocity * CW to pos_diff
-        vaddpd ymm4, ymm4, ymm6
-        vaddpd ymm3, ymm3, ymm9                 ;; Add random * pos_diff to it
-        vaddpd ymm4, ymm4, ymm10
-
-        vaddpd ymm7, ymm7, ymm3                 ;; Add velocity to x position
-        vaddpd ymm8, ymm8, ymm4                 ;; Add velocity to y position
-
-        ;; Checking bounds (unordered non-signaling)
-        vcmppd ymm0, ymm7, ymm11, 0x19          ;; !(ymm7 >= ymm11)
-        vcmppd ymm1, ymm7, ymm11, 0x15          ;; !(ymm7 < ymm11)
-        adjust_pos ymm7, ymm0, ymm1, ymm11      ;; Adjust position based on bounds
-
-        vcmppd ymm0, ymm7, ymm12, 0x1e          ;; ymm7 > ymm12
-        vcmppd ymm1, ymm7, ymm12, 0x1a          ;; !(ymm7 > ymm12)
-        adjust_pos ymm7, ymm0, ymm1, ymm12
-
-        vcmppd ymm0, ymm8, ymm13, 0x19          
-        vcmppd ymm1, ymm8, ymm13, 0x15          
-        adjust_pos ymm8, ymm0, ymm1, ymm13      
-
-        vcmppd ymm0, ymm8, ymm14, 0x1e          
-        vcmppd ymm1, ymm8, ymm14, 0x1a          
-        adjust_pos ymm8, ymm0, ymm1, ymm14
-
-        ;; Update positional values
-        vextracti128 xmm0, ymm7, 0x0            ;; Extract values from ymm into xmm0 and xmm1
-        vextracti128 xmm1, ymm7, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION0], xmm0, 0x0 ;; Save new position into particle
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE], xmm0, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*2], xmm1, 0x0 
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*3], xmm1, 0x1
-
-        vextracti128 xmm0, ymm8, 0x0            
-        vextracti128 xmm1, ymm8, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION1], xmm0, 0x0
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE], xmm0, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*2], xmm1, 0x0 
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*3], xmm1, 0x1
-
-        ;; Update velocity values
-        vextracti128 xmm0, ymm3, 0x0            
-        vextracti128 xmm1, ymm3, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY0], xmm0, 0x0 
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE], xmm0, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*2], xmm1, 0x0 
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*3], xmm1, 0x1
-
-        vextracti128 xmm0, ymm4, 0x0            
-        vextracti128 xmm1, ymm4, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY1], xmm0, 0x0
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE], xmm0, 0x1
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*2], xmm1, 0x0 
-        vpextrq qword[%1+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*3], xmm1, 0x1
-%endmacro
+%endmacro ;; adjust_pos
 
 ;; Constants
 DBL_MAX                     EQU 0x7FEFFFFFFFFFFFFF  ;; Maximal value of double
@@ -255,6 +114,29 @@ __TEST_VAL       dq  -60.0, 2.0, 3.0, 87.0
 ;; Code
 section .text
 
+;; LESS_THAN 
+;; Fitness function (xmm0 < xmm1)
+;; @param
+;;      xmm0 - first value
+;;      xmm1 - second value
+;; @return
+;;      rax - if xmm0 < xmm1 then rax = -1; else 0; 
+fitness_less_than:
+        cmppd xmm0, xmm1, 0x11
+        movq rax, xmm0
+        ret
+
+;; GREATER_THAN 
+;; Fitness function (xmm0 > xmm1)
+;; @param
+;;      xmm0 - first value
+;;      xmm1 - second value
+;; @return
+;;      rax - if xmm0 > xmm1 then rax = -1; else 0; 
+fitness_greater_than:
+        cmppd xmm0, xmm1, 0x1e
+        movq rax, xmm0
+        ret
 
 ;; PSO3DIM_STATIC
 ;; Particle swarm optimization algorithm for 3 dimensional functions that does not use dynamical allocation
@@ -319,8 +201,8 @@ pso3dim_static:
         mov rax, [fitness_ptr]                          ;; Load fitness function
         movq xmm1, qword[swarm + r15 + _TPARTICLE3DIM_BEST_VAL]
         call rax
-        cmp rax, 1                              ;; If true then set this as personal best
-        je .personal_best
+        cmp rax, 0                              ;; If true then set this as personal best
+        jne .personal_best
         ;; Fitness function check is before checking first iteration,
         ;; because that will happen only once and will fail all the other times
         cmp r13, [iter_counter]                 ;; Check if this is the first iteration
@@ -359,8 +241,6 @@ pso3dim_static:
         vbroadcastsd ymm13, qword[r12+16]
         vbroadcastsd ymm14, qword[r12+24]
 .particle_update:
-	;update_particle3dim swarm+r15
-
         rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
         vpinsrq xmm8, rax, 0x0
         rnd2rax [__CONST_1_0]                        

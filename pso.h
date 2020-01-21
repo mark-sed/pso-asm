@@ -34,7 +34,7 @@ typedef double (* func3dim)(double, double);
  */
 void pso_init(){
     // Initializing pseudo-random generator
-    srand(1);
+    srand(time(NULL));
 }
 
 double random_double(double min, double max){
@@ -63,5 +63,21 @@ double random_double(double min, double max){
  * @note The amount of particles is determinated by the value of `PSO3DIM_STATIC_PARTICLES` macro
  */
 TPSOxy pso3dim_static(func3dim function, double bounds[2][2], fit_func fitness, unsigned long max_iter);
+
+/**
+ * Fitness function looking for minimum
+ * @param a first value to compare
+ * @param b second value to compare
+ * @return true if a < b, else false
+ */
+bool fitness_less_than(double a, double b);
+
+/**
+ * Fitness function looking for maximum
+ * @param a first value to compare
+ * @param b second value to compare
+ * @return true if a > b, else false
+ */
+bool fitness_greater_than(double a, double b);
 
 #endif//_PSO_H_
