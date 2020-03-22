@@ -1,0 +1,1 @@
+Odstranit -g z kompilace

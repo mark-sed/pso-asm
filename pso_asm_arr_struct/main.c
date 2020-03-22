@@ -4,8 +4,6 @@
 #include <float.h>
 #include <stdio.h>
 
-#include <limits.h>
-
 #ifndef M_PI
 // PI (Taken from boost library)
 #define M_PI (double)(3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651e+00)
@@ -26,7 +24,6 @@ typedef struct {
 } TParticle3Dim;
 
 extern TParticle3Dim swarm[];*/
-//extern TSwarm swarm[];
 
 
 double ackleys_function(double x, double y){
@@ -34,22 +31,18 @@ double ackleys_function(double x, double y){
 }
 
 double func2(double x, double y){
-    return ((1.0-x)*(1.0-x)) + 100*((y - x*x)*(y - x*x));
+  return ((1.0-x)*(1.0-x)) + 100*((y - x*x)*(y - x*x));
 }
 
 
 int main(int argc, char *argv[]){
-#define ITERS 1000
-    pso_init();
-    double bounds[][2] = {{-50.0, 50.0}, {-50., 50.}};
+#define ITERS 100000
+   pso_init();
+   double bounds[][2] = {{-50.0, 50.0}, {-50., 50.}};
 
-    TPSOxy res = pso3dim_static(ackleys_function, bounds, fitness_less_than, ITERS);
+   TPSOxy res = pso3dim_static(ackleys_function, bounds, fitness_less_than, ITERS);
 
-    //printf("[%.*e, %.*e]\n", DECIMAL_DIG, res.x, DECIMAL_DIG, res.y);
+   //printf("[%.*e, %.*e]\n", DECIMAL_DIG, res.x, DECIMAL_DIG, res.y);
 
-    /*for(int i = 0; i < 40; i++){
-        printf("[%f, %f] @ %f, %f - [%f, %f]\n", swarm->position1[i], swarm->position2[i], swarm->velocity1[i], swarm->velocity2[i], swarm->best_pos1[i], swarm->best_pos2[i]);
-    }*/
-
-    return res.x > 2 ? 1 : 0;
+   return res.x > 2 ? 1 : 0;
 }

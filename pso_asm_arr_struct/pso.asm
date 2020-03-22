@@ -14,7 +14,9 @@
 global pso3dim_static           ;; PSO algorithm for 3 dimensional function (does not use heap)
 global fitness_less_than        ;; Fitness function (less than)
 global fitness_greater_than     ;; Fitness function (greater than)
-global seed
+
+;; Included C functions
+extern random_double
 
 ;; Macros
 %define _PSO3DIM_STATIC_PARTICLES 40          ;; How many particles will be used in pso3dim_static function
@@ -25,24 +27,57 @@ global seed
 ;;    double best_pos[2];  //< Best position
 ;;    double best_val;     //< Value of the best position
 ;; } TParticle3Dim;
+%define _TPARTICLE3DIM_SIZE 64                      ;; Extra padding is added for alignment
 %define _TPARTICLE3DIM_VELOCITY0 0                  ;; Offsets of elements in particle struct
-%define _TPARTICLE3DIM_VELOCITY1 1 * 8 * _PSO3DIM_STATIC_PARTICLES                 
-%define _TPARTICLE3DIM_POSITION0 2 * 8 * _PSO3DIM_STATIC_PARTICLES                 
-%define _TPARTICLE3DIM_POSITION1 3 * 8 * _PSO3DIM_STATIC_PARTICLES
-%define _TPARTICLE3DIM_BEST_POS0 4 * 8 * _PSO3DIM_STATIC_PARTICLES
-%define _TPARTICLE3DIM_BEST_POS1 5 * 8 * _PSO3DIM_STATIC_PARTICLES
-%define _TPARTICLE3DIM_BEST_VAL  6 * 8 * _PSO3DIM_STATIC_PARTICLES
+%define _TPARTICLE3DIM_VELOCITY1 8                  
+%define _TPARTICLE3DIM_POSITION0 16                 
+%define _TPARTICLE3DIM_POSITION1 24
+%define _TPARTICLE3DIM_BEST_POS0 32
+%define _TPARTICLE3DIM_BEST_POS1 40
+%define _TPARTICLE3DIM_BEST_VAL  48
 
 ;; Function macros
 
+;; INIT_PARTICLE3DIM
+;; Initializes particle to random position and speed
+;; @param
+;;      1 Current particle struct address 
+;;      2 Minimal X bound
+;;      3 Maximal X bound
+;;      4 Minimal Y bound
+;;      5 Maximal Y bound
+%macro init_particle3dim 5
+        movq xmm0, [__CONST__1_0]               ;; Set -1 as minimum (for speed)
+        movq xmm1, [__CONST_1_0]                ;; Set 1 as maximum (for speed)
+        call random_double                      
+        movq qword[%1+_TPARTICLE3DIM_VELOCITY0], xmm0 ;; Save generated value as velocity on X axis
+
+        movq xmm0, [__CONST__1_0]               
+        movq xmm1, [__CONST_1_0]                
+        call random_double                      
+        movq qword[%1+_TPARTICLE3DIM_VELOCITY1], xmm0 ;; Save generated value as velocity on Y axis
+        
+        movq xmm0, %2                           ;; Load bounds for random position generation
+        movq xmm1, %3
+        call random_double
+        movq qword[%1+_TPARTICLE3DIM_POSITION0], xmm0
+        movq qword[%1+_TPARTICLE3DIM_BEST_POS0], xmm0 ;; Set generated position also as the best one
+
+        movq xmm0, %4
+        movq xmm1, %5
+        call random_double
+        movq qword[%1+_TPARTICLE3DIM_POSITION1], xmm0
+        movq qword[%1+_TPARTICLE3DIM_BEST_POS1], xmm0
+%endmacro ;; init_particle3dim
+
 ;; RND2RAX 
 ;; Saves random value to rax
-%macro rnd2rax 0
-        mul rbx
-        and rax, r11
-        inc rax
-        cvtsi2sd xmm0, rax
-        divsd xmm0, xmm1
+;; @param
+;;      1 Max value
+%macro rnd2rax 1
+        xorps xmm0, xmm0                        ;; Set 0 and 1 as the arguments
+        movq xmm1, %1
+        call random_double
         movq rax, xmm0                          ;; Save random value to rax
 %endmacro ;; rnd2rax
 
@@ -60,25 +95,21 @@ global seed
 %endmacro ;; adjust_pos
 
 ;; Constants
-DBL_MAX         EQU 0x7FEFFFFFFFFFFFFF          ;; Maximal value of double
+DBL_MAX                     EQU 0x7FEFFFFFFFFFFFFF  ;; Maximal value of double
 
 ;; Global uninitialized variables
 section .bss
 align 64
-swarm    resb _PSO3DIM_STATIC_PARTICLES * 7 * 8 ;; Array of TParticle3Dim
+swarm   resb _PSO3DIM_STATIC_PARTICLES * _TPARTICLE3DIM_SIZE ;; Array of TParticle3Dim
 
 ;; Global variables
 section .data
 __CONST__1_0     dq -1.0
 __CONST_1_0      dq  1.0
-__CONST_2_0      dq  2.0
 __COEFF_W        dq  0.5, 0.5, 0.5, 0.5
 __COEFF_CP       dq  2.05, 2.05, 2.05, 2.05
 __COEFF_CG       dq  2.05, 2.05, 2.05, 2.05
-__TEST_VAL       dq -60.0, 2.0, 3.0, 87.0
-seed             dq  123453443242342        ;; Starting value of pseudorandom generator
-__RND_CONST      dq  69069                  ;; Random number multiplier
-__ULONG_MAX_DBL  dq  9223372036854775808.0 ;; Maximal value of long as double
+__TEST_VAL       dq  -60.0, 2.0, 3.0, 87.0
 
 ;; Code
 section .text
@@ -150,65 +181,12 @@ pso3dim_static:
         mov r13, rcx                            ;; Saving max iterations
         
         xor rbx, rbx
-        movsd xmm1, [__ULONG_MAX_DBL]           ;; Load xmms for init_particle3dim
-        movsd xmm2, [__CONST__1_0]
-        movsd xmm3, [__CONST_2_0]
-        movsd xmm4, qword[r12]                  ;; min x
-        movsd xmm5, qword[r12+8]
-        subsd xmm5, xmm4                        ;; max x - min x
-        movsd xmm6, qword[r12+16]               ;; min y
-        movsd xmm7, qword[r12+24]
-        subsd xmm7, xmm6                        ;; max y - min y
-        mov rax, qword[seed]
-        mov r14, qword[__RND_CONST] 
-        mov r11, 0x7fffffffffffffff
-        ;; For better pseudorandomness one generation should be done
-        mul r14                                                          
-        inc rax       
-.swarm_init_loop:          
-        mul r14                                 ;; seed * RND_CONST
-        and rax, r11                            ;; remove possible overflow (negative value)
-        inc rax                                 ;; seed * RND_CONST + 1
-        cvtsi2sd xmm0, rax
-        divsd xmm0, xmm1
-        mulsd xmm0, xmm3                        ;; * 2
-        addsd xmm0, xmm2                        ;; + -1                  
-        movq qword[swarm+rbx+_TPARTICLE3DIM_VELOCITY0], xmm0 ;; Save generated value as velocity on X axis
-
-        mul r14
-        and rax, r11
-        inc rax
-        cvtsi2sd xmm0, rax
-        divsd xmm0, xmm1
-        mulsd xmm0, xmm3                        
-        addsd xmm0, xmm2                                         
-        movq qword[swarm+rbx+_TPARTICLE3DIM_VELOCITY1], xmm0 
-        
-        mul r14
-        and rax, r11
-        inc rax
-        cvtsi2sd xmm0, rax
-        divsd xmm0, xmm1
-        mulsd xmm0, xmm5                          ;; rand() * (maxX-minX)
-        addsd xmm0, xmm4                          ;; rand() * (maxX-minX) + minX
-        movq qword[swarm+rbx+_TPARTICLE3DIM_POSITION0], xmm0
-        movq qword[swarm+rbx+_TPARTICLE3DIM_BEST_POS0], xmm0
-
-        mul r14
-        and rax, r11
-        inc rax
-        cvtsi2sd xmm0, rax
-        divsd xmm0, xmm1
-        mulsd xmm0, xmm7                          ;; rand() * (maxY-minY)
-        addsd xmm0, xmm6                          ;; rand() * (maxY-minY) + minY
-        movq qword[swarm+rbx+_TPARTICLE3DIM_POSITION1], xmm0
-        movq qword[swarm+rbx+_TPARTICLE3DIM_BEST_POS1], xmm0          
-
-        add rbx, 8
-        cmp rbx, 8*_PSO3DIM_STATIC_PARTICLES
+.swarm_init_loop:
+        init_particle3dim swarm+rbx, qword[r12], qword[r12+8], qword[r12+16], qword[r12+24]
+        add rbx, _TPARTICLE3DIM_SIZE
+        cmp rbx, _TPARTICLE3DIM_SIZE*_PSO3DIM_STATIC_PARTICLES
         jb .swarm_init_loop                     ;; Initialize all particles
 
-        mov qword[seed], rax                    ;; Save seed
         mov r14, DBL_MAX                        ;; Holds best value
 .max_iter_loop:
         xor r15, r15                            ;; Counter
@@ -219,7 +197,7 @@ pso3dim_static:
         call rax
         movq rbx, xmm0                          ;; Save returned value, but keep as argument
 
-        mov rax, [fitness_ptr]                  ;; Load fitness function
+        mov rax, [fitness_ptr]                          ;; Load fitness function
         movq xmm1, qword[swarm + r15 + _TPARTICLE3DIM_BEST_VAL]
         call rax
         cmp rax, 0                              ;; If true then set this as personal best
@@ -248,8 +226,9 @@ pso3dim_static:
         mov qword[best_pos_x], rax              ;; Set best position to current one
         mov qword[best_pos_y], rcx
 .personal_best_end:
-        add r15, 8
-        cmp r15, 8 * _PSO3DIM_STATIC_PARTICLES
+
+        add r15, _TPARTICLE3DIM_SIZE
+        cmp r15, _TPARTICLE3DIM_SIZE * _PSO3DIM_STATIC_PARTICLES
         jne .for_each_particle
 
         xor r15, r15
@@ -260,36 +239,31 @@ pso3dim_static:
         vbroadcastsd ymm12, qword[r12+8]
         vbroadcastsd ymm13, qword[r12+16]
         vbroadcastsd ymm14, qword[r12+24]
-        mov rax, qword[seed]
-        mov r11, 0x7fffffffffffffff
-        mov rbx, [__RND_CONST]
 .particle_update:
-        movsd xmm1, [__ULONG_MAX_DBL]
-
-        rnd2rax                                 ;; Generate random double <0, 1>
+        rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
         vpinsrq xmm8, rax, 0x0
-        rnd2rax                        
+        rnd2rax [__CONST_1_0]                        
         vpinsrq xmm8, rax, 0x1
         vinserti128 ymm10, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm10
 
-        rnd2rax
+        rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x0
-        rnd2rax
+        rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm9, ymm10, xmm8, 0x0      ;; Move 2 doubles from xmm2 to lower half of ymm9
+        vinserti128 ymm9, ymm10, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm9
 
         ;; Filling ymm1 with 4 random doubles
-        rnd2rax                                 
+        rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
         vpinsrq xmm8, rax, 0x0
-        rnd2rax                       
+        rnd2rax [__CONST_1_0]                        
         vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm5, ymm3, xmm8, 0x1       ;; Move 2 doubles from xmm2 to upper half of ymm5
+        vinserti128 ymm5, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm5
 
-        rnd2rax
+        rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x0
-        rnd2rax
+        rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm1, ymm5, xmm8, 0x0      ;; Move 2 doubles from xmm2 to lower half of ymm1
+        vinserti128 ymm1, ymm5, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm1
 
         vmulpd ymm0, ymm9, [__COEFF_CP]        ;; Multiply random numbers by CP into ymm0
         vmulpd ymm1, ymm1, [__COEFF_CG]        ;; Multiply random numbers by CG into ymm1
@@ -297,11 +271,38 @@ pso3dim_static:
         vbroadcastsd ymm5, qword[best_pos_x]   ;; Fill ymm with best positions
         vbroadcastsd ymm6, qword[best_pos_y]
 
-        vmovupd ymm3, [swarm+r15+_TPARTICLE3DIM_VELOCITY0]
-        vmovupd ymm4, [swarm+r15+_TPARTICLE3DIM_VELOCITY1]
-        vmovupd ymm7, [swarm+r15+_TPARTICLE3DIM_POSITION0]
-        vmovupd ymm8, [swarm+r15+_TPARTICLE3DIM_POSITION1]
+        ;; Load x velocity to ymm registers
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE], 0x0
+        vinserti128 ymm2, ymm10, xmm15, 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*2], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*3], 0x0
+        vinserti128 ymm3, ymm2, xmm15, 0x0
 
+        ;; Load y velocity to ymm registers
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE], 0x0
+        vinserti128 ymm2, ymm10, xmm15, 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*2], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*3], 0x0
+        vinserti128 ymm4, ymm2, xmm15, 0x0
+
+        ;; Load x position to ymm registers
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION0], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE], 0x0
+        vinserti128 ymm2, ymm10, xmm15, 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*2], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*3], 0x0
+        vinserti128 ymm7, ymm2, xmm15, 0x0
+
+        ;; Load y position to ymm registers
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION1], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE], 0x0
+        vinserti128 ymm2, ymm10, xmm15, 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*2], 0x1
+        vpinsrq xmm15, qword[swarm+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*3], 0x0
+        vinserti128 ymm8, ymm2, xmm15, 0x0
+        
         vsubpd ymm5, ymm5, ymm7                 ;; Subtract best x position and x position (pos_diff0)
         vsubpd ymm6, ymm6, ymm8                 ;; Subtract best y position and y position (pos_diff1)
 
@@ -342,17 +343,38 @@ pso3dim_static:
         adjust_pos ymm8, ymm0, ymm1, ymm14
 
         ;; Update positional values
-        vmovupd [swarm+r15+_TPARTICLE3DIM_POSITION0], ymm7
-        vmovupd [swarm+r15+_TPARTICLE3DIM_POSITION1], ymm8
+        vextracti128 xmm0, ymm7, 0x0            ;; Extract values from ymm into xmm0 and xmm1
+        vextracti128 xmm1, ymm7, 0x1
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION0], xmm1, 0x1 ;; Save new position into particle
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE], xmm1, 0x0
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*2], xmm0, 0x1 
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION0+_TPARTICLE3DIM_SIZE*3], xmm0, 0x0
+
+        vextracti128 xmm0, ymm8, 0x0            
+        vextracti128 xmm1, ymm8, 0x1
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION1], xmm1, 0x1
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE], xmm1, 0x0
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*2], xmm0, 0x1 
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_POSITION1+_TPARTICLE3DIM_SIZE*3], xmm0, 0x0
 
         ;; Update velocity values
-        vmovupd [swarm+r15+_TPARTICLE3DIM_VELOCITY0], ymm3
-        vmovupd [swarm+r15+_TPARTICLE3DIM_VELOCITY1], ymm4
+        vextracti128 xmm0, ymm3, 0x0            
+        vextracti128 xmm1, ymm3, 0x1
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0], xmm1, 0x1 
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE], xmm1, 0x0
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*2], xmm0, 0x1 
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY0+_TPARTICLE3DIM_SIZE*3], xmm0, 0x0
 
-        add r15, 8
-        cmp r15, 8 * _PSO3DIM_STATIC_PARTICLES
+        vextracti128 xmm0, ymm4, 0x0            
+        vextracti128 xmm1, ymm4, 0x1
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1], xmm1, 0x1
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE], xmm1, 0x0
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*2], xmm0, 0x1 
+        vpextrq qword[swarm+r15+_TPARTICLE3DIM_VELOCITY1+_TPARTICLE3DIM_SIZE*3], xmm0, 0x0
+
+        add r15, _TPARTICLE3DIM_SIZE * 4
+        cmp r15, _TPARTICLE3DIM_SIZE * _PSO3DIM_STATIC_PARTICLES
         jne .particle_update
-        mov qword[seed], rax
 
         dec r13
         jnz .max_iter_loop                      ;; CMP is left out because dec sets zero flag
