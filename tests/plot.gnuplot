@@ -15,7 +15,7 @@ set y2tics offset 0, -1.5
 set y2label 't [s]' offset -2.5
 unset key
 set y2tic offset 0,-0.5
-set yrange[0:2.8]
+set yrange[0:0.26]
 set offset graph 0, 0, 0.0001, 0
 
 plot "data.dat" using 1:3:xtic(2) with boxes

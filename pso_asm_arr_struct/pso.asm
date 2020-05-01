@@ -5,7 +5,7 @@
 ;;
 ;; @file pso.asm
 ;; @author Marek Sedlacek (xsedla1b)
-;; @date October 2019
+;; @date March 2020
 ;; @email xsedla1b@fit.vutbr.cz 
 ;;        mr.mareksedlacek@gmail.com
 ;;
@@ -19,7 +19,7 @@ global fitness_greater_than     ;; Fitness function (greater than)
 extern random_double
 
 ;; Macros
-%define _PSO3DIM_STATIC_PARTICLES 40          ;; How many particles will be used in pso3dim_static function
+%define _PSO3DIM_STATIC_PARTICLES 40            ;; How many particles will be used in pso3dim_static function
 
 ;; typedef struct {
 ;;    double velocity[2];  //< Velocity for each dimension
@@ -27,8 +27,8 @@ extern random_double
 ;;    double best_pos[2];  //< Best position
 ;;    double best_val;     //< Value of the best position
 ;; } TParticle3Dim;
-%define _TPARTICLE3DIM_SIZE 64                      ;; Extra padding is added for alignment
-%define _TPARTICLE3DIM_VELOCITY0 0                  ;; Offsets of elements in particle struct
+%define _TPARTICLE3DIM_SIZE 64                  ;; Extra padding is added for alignment
+%define _TPARTICLE3DIM_VELOCITY0 0              ;; Offsets of elements in particle struct
 %define _TPARTICLE3DIM_VELOCITY1 8                  
 %define _TPARTICLE3DIM_POSITION0 16                 
 %define _TPARTICLE3DIM_POSITION1 24
@@ -197,7 +197,7 @@ pso3dim_static:
         call rax
         movq rbx, xmm0                          ;; Save returned value, but keep as argument
 
-        mov rax, [fitness_ptr]                          ;; Load fitness function
+        mov rax, [fitness_ptr]                  ;; Load fitness function
         movq xmm1, qword[swarm + r15 + _TPARTICLE3DIM_BEST_VAL]
         call rax
         cmp rax, 0                              ;; If true then set this as personal best
@@ -232,7 +232,7 @@ pso3dim_static:
         jne .for_each_particle
 
         xor r15, r15
-        mov rax, qword[best_pos_x]		;; Get best x and y positions into registers (to speed up calculations)
+        mov rax, qword[best_pos_x]              ;; Get best x and y positions into registers (to speed up calculations)
         mov rcx, qword[best_pos_y]
 
         vbroadcastsd ymm11, qword[r12]          ;; Fill ymm registers with bounds for bound comparison
@@ -250,25 +250,25 @@ pso3dim_static:
         vpinsrq xmm8, rax, 0x0
         rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm9, ymm10, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm9
+        vinserti128 ymm9, ymm10, xmm8, 0x0      ;; Move 2 doubles from xmm2 to lower half of ymm9
 
         ;; Filling ymm1 with 4 random doubles
         rnd2rax [__CONST_1_0]                   ;; Generate random double <0, 1>
         vpinsrq xmm8, rax, 0x0
         rnd2rax [__CONST_1_0]                        
         vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm5, ymm3, xmm8, 0x1      ;; Move 2 doubles from xmm2 to upper half of ymm5
+        vinserti128 ymm5, ymm3, xmm8, 0x1       ;; Move 2 doubles from xmm2 to upper half of ymm5
 
         rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x0
         rnd2rax [__CONST_1_0]
         vpinsrq xmm8, rax, 0x1
-        vinserti128 ymm1, ymm5, xmm8, 0x0     ;; Move 2 doubles from xmm2 to lower half of ymm1
+        vinserti128 ymm1, ymm5, xmm8, 0x0       ;; Move 2 doubles from xmm2 to lower half of ymm1
 
-        vmulpd ymm0, ymm9, [__COEFF_CP]        ;; Multiply random numbers by CP into ymm0
-        vmulpd ymm1, ymm1, [__COEFF_CG]        ;; Multiply random numbers by CG into ymm1
+        vmulpd ymm0, ymm9, [__COEFF_CP]         ;; Multiply random numbers by CP into ymm0
+        vmulpd ymm1, ymm1, [__COEFF_CG]         ;; Multiply random numbers by CG into ymm1
 
-        vbroadcastsd ymm5, qword[best_pos_x]   ;; Fill ymm with best positions
+        vbroadcastsd ymm5, qword[best_pos_x]    ;; Fill ymm with best positions
         vbroadcastsd ymm6, qword[best_pos_y]
 
         ;; Load x velocity to ymm registers

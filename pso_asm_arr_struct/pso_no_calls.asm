@@ -5,7 +5,7 @@
 ;;
 ;; @file pso.asm
 ;; @author Marek Sedlacek (xsedla1b)
-;; @date October 2019
+;; @date March 2020
 ;; @email xsedla1b@fit.vutbr.cz 
 ;;        mr.mareksedlacek@gmail.com
 ;;
@@ -370,4 +370,4 @@ pso3dim_static:
         mov rsp, rbp
         pop rbp
         ret
-;; end pso3dim_static
+; end pso3dim_static

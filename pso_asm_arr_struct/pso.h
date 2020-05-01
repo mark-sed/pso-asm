@@ -1,3 +1,18 @@
+/**
+ * @file pso.h
+ * @author Marek Sedláček
+ * @date April 2020
+ * 
+ * @brief Header file for PSO module
+ *
+ * This header file contains functions and type declarations
+ * for Particle Swarm Optimization (PSO) module.
+ * PSO module is able optimize functions using PSO algorithm.
+ *
+ * This code was made for my bachelor's thesis at
+ * Brno University of Technology
+ */
+
 #ifndef _PSO_H_
 #define _PSO_H_
 
@@ -6,7 +21,7 @@
 #include <stdbool.h>
 
 /**
- * Return type for statical PSO
+ * Return type for static PSO
  */
 typedef struct {
     double x;  //< X coordinate
@@ -37,16 +52,13 @@ void pso_init(){
     srand(time(NULL));
 }
 
+/**
+ * Generates a random double in range
+ * RAND_MAX is taken from https://en.cppreference.com/w/c/numeric/random/RAND_MAX
+ */
 double random_double(double min, double max){
-	//static int i = 1;
-	//printf("%d MIN: %f, MAX: %f\n", i++, min, max);
-	double r = min + (rand() / (RAND_MAX / (max-min)));
-	
-	//printf("%d. %f \n", i++, r);
-	return r;
-	//return min + (rand() / (RAND_MAX / (max-min)));
+    return min + (rand() / (RAND_MAX / (max-min)));
 }
-
 
 /**
  * Particle swarm optimization algorithm for 3 dimensional functions that does not use dynamical allocation
